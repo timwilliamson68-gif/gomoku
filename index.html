@@ -533,6 +533,7 @@ function updateDiffBadge(){
 }
 
 function showResult(youWin){
+  const steps=hist.length;
   const ind=document.getElementById('turnInd');
   if(youWin){
     points++;
@@ -543,14 +544,14 @@ function showResult(youWin){
     }
     document.getElementById('mIcon').textContent='🏆';
     document.getElementById('mTitle').textContent='你赢了！';
-    document.getElementById('mDesc').textContent='恭喜你在「'+DNAMES[diff].replace(/[^\u4e00-\u9fa5]/g,'')+'」难度战胜了AI！'+' 当前积分: '+'⭐'.repeat(points)+'☆'.repeat(POINTS_TO_PROMOTE-points)+' ('+points+'/'+POINTS_TO_PROMOTE+')';
+    document.getElementById('mDesc').textContent='恭喜你在「'+DNAMES[diff].replace(/[^\u4e00-\u9fa5]/g,'')+'」难度战胜了AI！本局总步数：'+steps+'。 当前积分: '+'⭐'.repeat(points)+'☆'.repeat(POINTS_TO_PROMOTE-points)+' ('+points+'/'+POINTS_TO_PROMOTE+')';
     ind.className='turn-indicator win';ind.textContent='🏆 你赢了！';
     playSound('win');
   }else{
     points=0;updatePointsDisplay();
     document.getElementById('mIcon').textContent='😅';
     document.getElementById('mTitle').textContent='AI 赢了';
-    document.getElementById('mDesc').textContent='「'+DNAMES[diff].replace(/[^\u4e00-\u9fa5]/g,'')+'」难度的AI赢了，再试试？';
+    document.getElementById('mDesc').textContent='「'+DNAMES[diff].replace(/[^\u4e00-\u9fa5]/g,'')+'」难度的AI赢了，本局总步数：'+steps+'。再试试？';
     ind.className='turn-indicator ai';ind.textContent='😅 AI 赢了';
     playSound('lose');
   }
