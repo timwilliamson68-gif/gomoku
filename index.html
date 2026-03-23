@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>五子棋 · 人机对战</title>
+<style>
+:root{--wood-light:#e8c99a;--wood-mid:#c8a06b;--wood-dark:#a07840;--board-bg:#deb887;--board-line:#8b6914;--accent-red:#e74c3c;--accent-blue:#3498db;--accent-gold:#f39c12;--panel-bg:rgba(255,255,255,0.92);--shadow:0 4px 20px rgba(0,0,0,0.15);--font-main:'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font-main);background:linear-gradient(135deg,#f5e6d0 0%,#e8d5b0 50%,#d4b896 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.game-wrapper{display:flex;flex-direction:column;align-items:center;gap:12px;padding:16px}
+.header{display:flex;align-items:center;gap:16px;background:var(--panel-bg);backdrop-filter:blur(10px);border-radius:16px;padding:10px 24px;box-shadow:var(--shadow);flex-wrap:wrap;justify-content:center}
+.title{font-size:22px;font-weight:700;color:var(--wood-dark);letter-spacing:2px}
+.title span{color:var(--accent-gold)}
+.diff-badge{font-size:12px;font-weight:700;padding:4px 14px;border-radius:12px;color:#fff;cursor:pointer;transition:all .2s}
+.diff-badge:hover{transform:scale(1.05)}
+.diff-badge.lv0{background:linear-gradient(135deg,#a8e6cf,#55c89b)}
+.diff-badge.lv1{background:linear-gradient(135deg,#88d8b0,#4ab78e)}
+.diff-badge.lv2{background:linear-gradient(135deg,#ffeaa7,#e6a817)}
+.diff-badge.lv3{background:linear-gradient(135deg,#ff7675,#d63031)}
+.diff-badge.lv4{background:linear-gradient(135deg,#a29bfe,#6c5ce7)}
+.turn-indicator{font-size:15px;font-weight:600;padding:6px 18px;border-radius:20px;transition:all .3s;min-width:140px;text-align:center}
+.turn-indicator.player{background:linear-gradient(135deg,#2c2c2c,#444);color:#fff}
+.turn-indicator.ai{background:linear-gradient(135deg,#e8e8e8,#ccc);color:#333}
+.turn-indicator.win{background:linear-gradient(135deg,var(--accent-gold),#e67e22);color:#fff;animation:pulse 1s ease infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+.canvas-container{position:relative;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,0.25),0 2px 8px rgba(0,0,0,0.15);background:var(--board-bg);padding:18px}
+canvas{display:block;border-radius:6px;cursor:pointer;touch-action:none}
+.controls{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.btn{font-family:var(--font-main);font-size:14px;font-weight:600;padding:8px 22px;border:none;border-radius:20px;cursor:pointer;transition:all .2s;outline:none;box-shadow:0 2px 8px rgba(0,0,0,0.15)}
+.btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,0.2)}
+.btn:active{transform:translateY(0)}
+.btn-restart{background:linear-gradient(135deg,var(--accent-gold),#e67e22);color:#fff}
+.btn-undo{background:linear-gradient(135deg,#74b9ff,#3498db);color:#fff}
+.btn-undo:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.btn-change{background:linear-gradient(135deg,#b8b8b8,#888);color:#fff}
+.switch-row{display:flex;align-items:center;gap:8px;background:var(--panel-bg);border-radius:16px;padding:6px 16px;box-shadow:var(--shadow);font-size:13px;color:#555}
+.switch-row label{font-weight:600;cursor:pointer;user-select:none}
+.toggle-switch{position:relative;width:44px;height:24px}
+.toggle-switch input{opacity:0;width:0;height:0}
+.slider{position:absolute;inset:0;background:#ccc;border-radius:24px;transition:.3s;cursor:pointer}
+.slider::before{content:'';position:absolute;width:18px;height:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s;box-shadow:0 1px 4px rgba(0,0,0,0.2)}
+.toggle-switch input:checked+.slider{background:linear-gradient(135deg,var(--accent-gold),#e67e22)}
+.toggle-switch input:checked+.slider::before{transform:translateX(20px)}
+/* Difficulty Screen */
+.diff-screen{position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:1000;backdrop-filter:blur(4px)}
+.diff-screen.hidden{display:none}
+.diff-panel{background:var(--panel-bg);border-radius:24px;padding:36px 40px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.4);max-width:520px;width:90%}
+.diff-panel h2{font-size:26px;font-weight:800;color:var(--wood-dark);margin-bottom:6px}
+.diff-panel p{font-size:13px;color:#888;margin-bottom:24px}
+.diff-grid{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:8px}
+.dbtn{display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 14px;border:none;border-radius:16px;cursor:pointer;transition:all .2s;min-width:80px}
+.dbtn:hover{transform:translateY(-3px);box-shadow:0 6px 20px rgba(0,0,0,0.2)}
+.dbtn .ico{font-size:28px}
+.dbtn .lbl{font-size:13px;font-weight:700}
+.dbtn .desc{font-size:10px;opacity:.7}
+.dbtn.b0{background:linear-gradient(135deg,#a8e6cf,#88d8b0);color:#2d5a3d}
+.dbtn.b1{background:linear-gradient(135deg,#88d8b0,#5cb89a);color:#1d4a30}
+.dbtn.b2{background:linear-gradient(135deg,#ffeaa7,#fdcb6e);color:#6b4e00}
+.dbtn.b3{background:linear-gradient(135deg,#ff7675,#e74c3c);color:#fff}
+.dbtn.b4{background:linear-gradient(135deg,#a29bfe,#6c5ce7);color:#fff}
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:999;opacity:0;pointer-events:none;transition:opacity .35s}
+.modal-overlay.show{opacity:1;pointer-events:all}
+.modal{background:var(--panel-bg);border-radius:24px;padding:36px 44px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);transform:scale(.7);transition:transform .35s cubic-bezier(.34,1.56,.64,1);max-width:380px}
+.modal-overlay.show .modal{transform:scale(1)}
+.modal-icon{font-size:64px;line-height:1;margin-bottom:12px}
+.modal h2{font-size:28px;font-weight:800;margin-bottom:8px;color:var(--wood-dark)}
+.modal p{font-size:15px;color:#666;margin-bottom:24px}
+.modal-btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.modal .btn{padding:10px 28px;font-size:15px}
+</style>
+</head>
+<body>
+
+<div class="diff-screen" id="diffScreen">
+  <div class="diff-panel">
+    <h2>⚔️ 选择难度</h2>
+    <p>选一个适合你的对手强度</p>
+    <div class="diff-grid">
+      <button class="dbtn b0" onclick="selectDiff(0)"><span class="ico">🌱</span><span class="lbl">入门</span><span class="desc">随机落子</span></button>
+      <button class="dbtn b1" onclick="selectDiff(1)"><span class="ico">😊</span><span class="lbl">简单</span><span class="desc">基础攻防</span></button>
+      <button class="dbtn b2" onclick="selectDiff(2)"><span class="ico">🤔</span><span class="lbl">中等</span><span class="desc">全向评分</span></button>
+      <button class="dbtn b3" onclick="selectDiff(3)"><span class="ico">😈</span><span class="lbl">困难</span><span class="desc">威胁优先</span></button>
+      <button class="dbtn b4" onclick="selectDiff(4)"><span class="ico">👑</span><span class="lbl">传说</span><span class="desc">两步预判</span></button>
+    </div>
+  </div>
+</div>
+
+<div class="game-wrapper">
+  <div class="header">
+    <div class="title">⚔️ <span>五子棋</span> · 人机对战</div>
+    <div class="diff-badge lv0" id="diffBadge" onclick="showDiffScreen()">🌱 入门</div>
+    <div class="turn-indicator player" id="turnInd">⚫ 你的回合</div>
+  </div>
+  <div class="canvas-container"><canvas id="board"></canvas></div>
+  <div class="controls">
+    <button class="btn btn-undo" id="undoBtn" disabled onclick="undo()">↩ 悔棋</button>
+    <button class="btn btn-restart" onclick="restartGame()">🔄 重新开局</button>
+  </div>
+  <div class="switch-row">
+    <label for="switchFirst">玩家执黑先手</label>
+    <div class="toggle-switch"><input type="checkbox" id="switchFirst" checked onchange="toggleFirst(this.checked)"><span class="slider"></span></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-icon" id="mIcon">🏆</div>
+    <h2 id="mTitle">你赢了！</h2>
+    <p id="mDesc">恭喜你战胜了AI！</p>
+    <div class="modal-btns">
+      <button class="btn btn-restart" onclick="hideModal();restartGame()">再来一局</button>
+      <button class="btn btn-change" onclick="hideModal();showDiffScreen()">换难度</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Audio
+// ═══════════════════════════════════════════════════════════════════════════════
+let audioCtx=null;
+function getAC(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();return audioCtx}
+function playSound(t){try{const x=getAC(),g=x.createGain(),n=x.currentTime;g.connect(x.destination);if(t==='place'){const o=x.createOscillator();o.type='sine';o.frequency.setValueAtTime(600,n);o.frequency.exponentialRampToValueAtTime(120,n+.08);g.gain.setValueAtTime(.25,n);g.gain.exponentialRampToValueAtTime(.001,n+.1);o.connect(g);o.start(n);o.stop(n+.12)}else if(t==='win'){[523,659,784,1047].forEach((f,i)=>{const o=x.createOscillator();o.type='sine';o.frequency.value=f;const gg=x.createGain();gg.connect(x.destination);const tt=n+i*.15;gg.gain.setValueAtTime(0,tt);gg.gain.linearRampToValueAtTime(.2,tt+.05);gg.gain.exponentialRampToValueAtTime(.001,tt+.5);o.connect(gg);o.start(tt);o.stop(tt+.55)})}else if(t==='lose'){[400,320,250,180].forEach((f,i)=>{const o=x.createOscillator();o.type='sawtooth';o.frequency.value=f;const gg=x.createGain();gg.connect(x.destination);const tt=n+i*.2;gg.gain.setValueAtTime(0,tt);gg.gain.linearRampToValueAtTime(.12,tt+.05);gg.gain.exponentialRampToValueAtTime(.001,tt+.4);o.connect(gg);o.start(tt);o.stop(tt+.45)})}else if(t==='promote'){[523,659,784,1047,1319].forEach((f,i)=>{const o=x.createOscillator();o.type='sine';o.frequency.value=f;const gg=x.createGain();gg.connect(x.destination);const tt=n+i*.1;gg.gain.setValueAtTime(0,tt);gg.gain.linearRampToValueAtTime(.22,tt+.05);gg.gain.exponentialRampToValueAtTime(.001,tt+.6);o.connect(gg);o.start(tt);o.stop(tt+.65)})}}catch(e){}}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Constants & State
+// ═══════════════════════════════════════════════════════════════════════════════
+const G=15, BPX=560, CELL=BPX/(G+1), PAD=CELL, SR=CELL*.44, STR=CELL*.1;
+const DIRS=[[0,1],[1,0],[1,1],[1,-1]];
+const DNAMES=['🌱 入门','😊 简单','🤔 中等','😈 困难','👑 传说'];
+
+let board=[], hist=[], gameOver=false, playerFirst=true, lastPos=null, winLine=null, aiThinking=false, diff=0, currentDifficulty=0;
+let points = 0;  // 当前积分
+const POINTS_TO_PROMOTE = 3;  // 晋级所需积分
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Canvas Setup
+// ═══════════════════════════════════════════════════════════════════════════════
+const cv=document.getElementById('board'), cx=cv.getContext('2d'), DPR=window.devicePixelRatio||1;
+cv.width=BPX*DPR;cv.height=BPX*DPR;cv.style.width=BPX+'px';cv.style.height=BPX+'px';cx.scale(DPR,DPR);
+
+function bXY(ex,ey){const r=cv.getBoundingClientRect();const sx=(ex-r.left)*(BPX/r.width),sy=(ey-r.top)*(BPX/r.height);return{r:Math.round((sy-PAD)/CELL),c:Math.round((sx-PAD)/CELL)}}
+function ok(r,c){return r>=0&&r<G&&c>=0&&c<G}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Drawing (preserved from original)
+// ═══════════════════════════════════════════════════════════════════════════════
+function drawBoard(){
+  cx.clearRect(0,0,BPX,BPX);
+  const g=cx.createLinearGradient(0,0,BPX,BPX);g.addColorStop(0,'#e8c99a');g.addColorStop(.5,'#deb887');g.addColorStop(1,'#c8a06b');cx.fillStyle=g;cx.fillRect(0,0,BPX,BPX);
+  cx.strokeStyle='rgba(160,120,60,0.08)';cx.lineWidth=1;
+  for(let i=0;i<20;i++){cx.beginPath();cx.moveTo(0,i*(BPX/20));cx.bezierCurveTo(BPX*.3,i*(BPX/20)+8,BPX*.7,i*(BPX/20)-8,BPX,i*(BPX/20));cx.stroke()}
+  cx.strokeStyle='#8b6914';cx.lineWidth=1;
+  for(let i=0;i<G;i++){const p=PAD+i*CELL;cx.beginPath();cx.moveTo(p,PAD);cx.lineTo(p,PAD+(G-1)*CELL);cx.stroke();cx.beginPath();cx.moveTo(PAD,p);cx.lineTo(PAD+(G-1)*CELL,p);cx.stroke()}
+  const stars=[[3,3],[3,7],[3,11],[7,3],[7,7],[7,11],[11,3],[11,7],[11,11]];
+  cx.fillStyle='#5a3a0a';stars.forEach(([r,c])=>{cx.beginPath();cx.arc(PAD+c*CELL,PAD+r*CELL,STR,0,Math.PI*2);cx.fill()});
+  cx.fillStyle='#8b6914';cx.font='11px "Segoe UI",PingFang SC,sans-serif';cx.textAlign='center';cx.textBaseline='middle';
+  for(let i=0;i<G;i++){cx.fillText(String.fromCharCode(65+i),PAD+i*CELL,PAD-14);cx.fillText(String.fromCharCode(65+i),PAD+i*CELL,PAD+G*CELL+14);cx.fillText((i+1).toString(),PAD-14,PAD+i*CELL);cx.fillText((i+1).toString(),PAD+G*CELL+14,PAD+i*CELL)}
+}
+
+function drawStone(r,c,p,isLast,isWin){
+  const x=PAD+c*CELL,y=PAD+r*CELL;
+  cx.save();cx.shadowColor='rgba(0,0,0,0.45)';cx.shadowBlur=6;cx.shadowOffsetX=2;cx.shadowOffsetY=3;
+  const g=cx.createRadialGradient(x-SR*.3,y-SR*.3,0,x,y,SR);
+  if(p===1){g.addColorStop(0,'#555');g.addColorStop(.4,'#222');g.addColorStop(1,'#0a0a0a')}
+  else{g.addColorStop(0,'#fff');g.addColorStop(.4,'#e8e8e8');g.addColorStop(1,'#ccc')}
+  cx.beginPath();cx.arc(x,y,SR,0,Math.PI*2);cx.fillStyle=g;cx.fill();cx.restore();
+  cx.save();const gl=cx.createRadialGradient(x-SR*.3,y-SR*.3,0,x-SR*.2,y-SR*.2,SR*.6);gl.addColorStop(0,'rgba(255,255,255,0.5)');gl.addColorStop(1,'rgba(255,255,255,0)');cx.beginPath();cx.arc(x,y,SR,0,Math.PI*2);cx.fillStyle=gl;cx.fill();cx.restore();
+  if(isLast){cx.beginPath();cx.arc(x,y,SR*.28,0,Math.PI*2);cx.fillStyle=p===1?'#e74c3c':'#3498db';cx.fill()}
+  if(isWin){cx.beginPath();cx.arc(x,y,SR+3,0,Math.PI*2);cx.strokeStyle='#f39c12';cx.lineWidth=3;cx.stroke();cx.beginPath();cx.arc(x,y,SR+6,0,Math.PI*2);cx.strokeStyle='rgba(243,156,18,0.4)';cx.lineWidth=2;cx.stroke()}
+}
+
+function render(){
+  drawBoard();
+  for(let r=0;r<G;r++)for(let c=0;c<G;c++)if(board[r][c]!==0){
+    const il=lastPos&&lastPos.r===r&&lastPos.c===c;
+    const iw=winLine&&winLine.some(p=>p.r===r&&p.c===c);
+    drawStone(r,c,board[r][c],il,iw);
+  }
+  if(winLine&&winLine.length>=2){
+    cx.save();cx.strokeStyle='#f39c12';cx.lineWidth=4;cx.lineCap='round';cx.shadowColor='rgba(243,156,18,0.8)';cx.shadowBlur=8;
+    cx.beginPath();cx.moveTo(PAD+winLine[0].c*CELL,PAD+winLine[0].r*CELL);cx.lineTo(PAD+winLine[winLine.length-1].c*CELL,PAD+winLine[winLine.length-1].r*CELL);cx.stroke();cx.restore();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Win Check
+// ═══════════════════════════════════════════════════════════════════════════════
+function countLine(r,c,dr,dc,p){let n=0,pos=[];for(let i=0;i<5;i++){const nr=r+dr*i,nc=c+dc*i;if(!ok(nr,nc)||board[nr][nc]!==p)break;n++;pos.push({r:nr,c:nc})}return{count:n,pos}}
+function checkWin(p){for(let r=0;r<G;r++)for(let c=0;c<G;c++){if(board[r][c]!==p)continue;for(const[dr,dc]of DIRS){const{count,pos}=countLine(r,c,dr,dc,p);if(count>=5)return pos.slice(0,5)}}return null}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  AI Scoring Engine
+// ═══════════════════════════════════════════════════════════════════════════════
+// Analyze a direction from position (r,c) for player p
+// Returns: {consecutive, openEnds} where openEnds is 0,1,2
+function analyzeDir(r,c,dr,dc,p){
+  // Temporarily place stone
+  board[r][c]=p;
+  let count=1;
+  // forward
+  let fEnd=false;
+  for(let i=1;i<5;i++){const nr=r+dr*i,nc=c+dc*i;if(!ok(nr,nc)){fEnd=true;break}if(board[nr][nc]===p)count++;else{if(board[nr][nc]===0)fEnd=false;else fEnd=true;break}}
+  if(!fEnd)fEnd=false;
+  // backward
+  let bEnd=false;
+  for(let i=1;i<5;i++){const nr=r-dr*i,nc=c-dc*i;if(!ok(nr,nc)){bEnd=true;break}if(board[nr][nc]===p)count++;else{if(board[nr][nc]===0)bEnd=false;else bEnd=true;break}}
+  board[r][c]=0;
+  let openEnds=0;
+  if(!fEnd)openEnds++;
+  if(!bEnd)openEnds++;
+  return{consecutive:Math.min(count,5),openEnds};
+}
+
+// More accurate analysis
+function analyzeLine(r,c,dr,dc,p){
+  const opp=p===1?2:1;
+  let count=1,open1=true,open2=true;
+  // forward
+  for(let i=1;i<=4;i++){
+    const nr=r+dr*i,nc=c+dc*i;
+    if(!ok(nr,nc)){open1=false;break}
+    if(board[nr][nc]===p){count++}
+    else if(board[nr][nc]===0){break}
+    else{open1=false;break}
+  }
+  // backward
+  for(let i=1;i<=4;i++){
+    const nr=r-dr*i,nc=c-dc*i;
+    if(!ok(nr,nc)){open2=false;break}
+    if(board[nr][nc]===p){count++}
+    else if(board[nr][nc]===0){break}
+    else{open2=false;break}
+  }
+  let openEnds=(open1?1:0)+(open2?1:0);
+  return{count:Math.min(count,5),openEnds};
+}
+
+// Score map: [count][openEnds]
+const SCORE_FOUR      = 100000;  // 活四 (open four)
+const SCORE_RUSH_FOUR = 10000;   // 冲四 (rush four)
+const SCORE_OPEN_THREE= 5000;    // 活三 (open three)
+const SCORE_RUSH_THREE= 500;     // 眠三 (rush three)
+const SCORE_OPEN_TWO  = 200;     // 活二 (open two)
+const SCORE_RUSH_TWO  = 50;      // 眠二 (rush two)
+
+const SMAP={
+  5:{0:1000000,1:1000000,2:1000000},
+  4:{0:0,1:10000,2:100000},
+  3:{0:0,1:500,2:5000},
+  2:{0:0,1:50,2:200},
+  1:{0:0,1:5,2:10}
+};
+
+function scorePosFor(r,c,p){
+  if(board[r][c]!==0)return-1;
+  board[r][c]=p;
+  let total=0;
+  for(const[dr,dc]of DIRS){
+    const info=analyzeLine(r,c,dr,dc,p);
+    const s=SMAP[info.count]?SMAP[info.count][info.openEnds]||0:1000000;
+    total+=s;
+  }
+  board[r][c]=0;
+  return total;
+}
+
+// Get candidate moves (near existing stones)
+function getCandidates(range){
+  const moves=[];
+  const hasStones=hist.length>0;
+  for(let r=0;r<G;r++)for(let c=0;c<G;c++){
+    if(board[r][c]!==0)continue;
+    if(!hasStones){if(r===7&&c===7)moves.push({r,c});continue}
+    let near=false;
+    for(let dr=-range;dr<=range&&!near;dr++)for(let dc=-range;dc<=range&&!near;dc++){
+      if(dr===0&&dc===0)continue;
+      const nr=r+dr,nc=c+dc;
+      if(ok(nr,nc)&&board[nr][nc]!==0)near=true;
+    }
+    if(near)moves.push({r,c});
+  }
+  return moves.length?moves:[{r:7,c:7}];
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  AI Difficulty Implementations
+// ═══════════════════════════════════════════════════════════════════════════════
+function myColor(){return playerFirst?2:1}
+function oppColor(){return playerFirst?1:2}
+
+// Difficulty 0: Beginner — mostly random, sometimes blocks 3+
+function aiBeginner(){
+  const ai=myColor(),hu=oppColor();
+  const cands=getCandidates(2);
+  // Check if AI can win immediately
+  for(const m of cands){const s=scorePosFor(m.r,m.c,ai);if(s>=1000000)return m}
+  // 40% chance: block opponent 3+ in a row
+  if(Math.random()<0.4){
+    let best=null,bs=0;
+    for(const m of cands){const s=scorePosFor(m.r,m.c,hu);if(s>bs){bs=s;best=m}}
+    if(best&&bs>=500)return best;
+  }
+  // Otherwise random
+  return cands[Math.floor(Math.random()*cands.length)];
+}
+
+// Difficulty 1: Easy — evaluates top positions but only picks from top 2
+function aiEasy(){
+  const ai=myColor(),hu=oppColor();
+  const cands=getCandidates(2);
+  const scored=cands.map(m=>{
+    const atk=scorePosFor(m.r,m.c,ai);
+    const def=scorePosFor(m.r,m.c,hu);
+    return{...m,score:atk+def*0.9};
+  });
+  scored.sort((a,b)=>b.score-a.score);
+  // Pick from top 2 (or top 1 if only 1)
+  const top=scored.slice(0,Math.min(2,scored.length));
+  return top[Math.floor(Math.random()*top.length)];
+}
+
+// Difficulty 2: Medium — full evaluation, pick best
+function aiMedium(){
+  const ai=myColor(),hu=oppColor();
+  const cands=getCandidates(2);
+  let best=null,bs=-1;
+  for(const m of cands){
+    const atk=scorePosFor(m.r,m.c,ai);
+    const def=scorePosFor(m.r,m.c,hu);
+    const s=atk*1.05+def;
+    if(s>bs){bs=s;best=m}
+  }
+  return best||{r:7,c:7};
+}
+
+// Difficulty 3: Hard — threat-first: prioritize blocking opponent threats
+function aiHard(){
+  const ai=myColor(),hu=oppColor();
+  const cands=getCandidates(2);
+  let best=null,bs=-1;
+  for(const m of cands){
+    const atk=scorePosFor(m.r,m.c,ai);
+    const def=scorePosFor(m.r,m.c,hu);
+    // If opponent has open three or four, defense is weighted much higher
+    let weight=1.0;
+    if(def>=10000)weight=3.0;    // opponent rush-four or better: must block
+    else if(def>=5000)weight=2.5; // opponent open-three: high priority
+    else if(def>=500)weight=1.5;  // opponent rush-three
+    const s=atk*1.1+def*weight;
+    if(s>bs){bs=s;best=m}
+  }
+  return best||{r:7,c:7};
+}
+
+// Difficulty 4: Legend — 2-step lookahead + threat chaining
+function aiLegend(){
+  const ai=myColor(),hu=oppColor();
+  const cands=getCandidates(2);
+  
+  // First check: can AI win in 1 move?
+  for(const m of cands){if(scorePosFor(m.r,m.c,ai)>=1000000)return m}
+  // Must block opponent winning?
+  for(const m of cands){if(scorePosFor(m.r,m.c,hu)>=1000000)return m}
+  
+  let best=null,bs=-Infinity;
+  
+  for(const m of cands){
+    const atkBase=scorePosFor(m.r,m.c,ai);
+    const defBase=scorePosFor(m.r,m.c,hu);
+    
+    // Simulate placing this stone, then evaluate the board
+    board[m.r][m.c]=ai;
+    
+    // Check threat chain: does this move create multiple threats?
+    let threatCount=0,maxThreat=0;
+    for(const[dr,dc]of DIRS){
+      const info=analyzeLine(m.r,m.c,dr,dc,ai);
+      const sc=SMAP[info.count]?(SMAP[info.count][info.openEnds]||0):1000000;
+      if(sc>=5000)threatCount++;
+      if(sc>maxThreat)maxThreat=sc;
+    }
+    let threatBonus=0;
+    if(threatCount>=2)threatBonus=50000; // double threat = almost winning
+    
+    // Two-step lookahead: after AI places, what's the best opponent can do?
+    // And then what's the best AI can do after that?
+    let futureScore=0;
+    const oppCands=getCandidates(1);
+    // Sample up to 5 opponent responses for speed
+    const sampleOpp=oppCands.slice(0,Math.min(5,oppCands.length));
+    let worstCase=Infinity;
+    for(const om of sampleOpp){
+      if(board[om.r][om.c]!==0)continue;
+      board[om.r][om.c]=hu;
+      // After opponent responds, find AI's best next move value
+      let bestNext=-1;
+      const nextCands=getCandidates(1);
+      for(const nm of nextCands.slice(0,Math.min(5,nextCands.length))){
+        if(board[nm.r][nm.c]!==0)continue;
+        const ns=scorePosFor(nm.r,nm.c,ai);
+        if(ns>bestNext)bestNext=ns;
+      }
+      if(bestNext<worstCase)worstCase=bestNext;
+      board[om.r][om.c]=0;
+    }
+    if(worstCase===Infinity)worstCase=0;
+    futureScore=worstCase;
+    
+    board[m.r][m.c]=0;
+    
+    // Combine scores
+    let defWeight=1.0;
+    if(defBase>=10000)defWeight=3.0;
+    else if(defBase>=5000)defWeight=2.5;
+    else if(defBase>=500)defWeight=1.5;
+    
+    const total=atkBase*1.1+defBase*defWeight+threatBonus+futureScore*0.3;
+    if(total>bs){bs=total;best=m}
+  }
+  return best||{r:7,c:7};
+}
+
+// Dispatch
+function aiMove(){
+  switch(diff){
+    case 0:return aiBeginner();
+    case 1:return aiEasy();
+    case 2:return aiMedium();
+    case 3:return aiHard();
+    case 4:return aiLegend();
+    default:return aiMedium();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Game Logic
+// ═══════════════════════════════════════════════════════════════════════════════
+function init(){
+  board=Array.from({length:G},()=>Array(G).fill(0));
+  hist=[];gameOver=false;lastPos=null;winLine=null;aiThinking=false;
+  updateUI();render();updatePointsDisplay();
+  // If AI goes first (player is white, AI is black)
+  if(!playerFirst){
+    aiThinking=true;updateUI();
+    setTimeout(()=>{
+      const m=aiMove();aiThinking=false;
+      place(m.r,m.c,1); // black always goes first
+      updateUI();
+    },400);
+  }
+}
+
+function place(r,c,p){
+  board[r][c]=p;hist.push({r,c,player:p});lastPos={r,c};
+  playSound('place');
+  const w=checkWin(p);
+  if(w){winLine=w;gameOver=true;render();showResult(p===(playerFirst?1:2));return}
+  if(hist.length===G*G){gameOver=true;render();showDraw();return}
+  render();
+}
+
+function undo(){
+  if(hist.length<2||gameOver)return;
+  const a=hist.pop();board[a.r][a.c]=0;
+  const b=hist.pop();board[b.r][b.c]=0;
+  lastPos=hist.length?hist[hist.length-1]:null;
+  winLine=null;gameOver=false;aiThinking=false;
+  updateUI();render();
+}
+
+function onClick(e){
+  if(gameOver||aiThinking)return;
+  const{r,c}=bXY(e.clientX,e.clientY);
+  if(!ok(r,c)||board[r][c]!==0)return;
+  const pc=playerFirst?1:2;
+  place(r,c,pc);
+  if(!gameOver){
+    aiThinking=true;updateUI();
+    setTimeout(()=>{const m=aiMove();aiThinking=false;if(!gameOver)place(m.r,m.c,playerFirst?2:1);updateUI()},300+Math.random()*200);
+  }
+}
+
+cv.addEventListener('click',onClick);
+cv.addEventListener('touchend',e=>{e.preventDefault();const t=e.changedTouches[0];onClick({clientX:t.clientX,clientY:t.clientY})},{passive:false});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  UI
+// ═══════════════════════════════════════════════════════════════════════════════
+function updatePointsDisplay(){
+  let el=document.getElementById('pointsDisplay');
+  if(!el){el=document.createElement('div');el.id='pointsDisplay';el.style.cssText='font-size:13px;font-weight:700;color:#a07840;background:#fff8e7;border-radius:12px;padding:4px 14px;border:2px solid #f39c12;cursor:pointer;';document.getElementById('diffBadge').insertAdjacentElement('afterend',el)}
+  if(points>=POINTS_TO_PROMOTE){el.textContent='⭐⭐⭐（已晋级！）';el.style.color='#6c5ce7'}else{el.textContent='积分: '+'⭐'.repeat(points)+'☆'.repeat(POINTS_TO_PROMOTE-points)+' '+points+'/'+POINTS_TO_PROMOTE}
+}
+
+function promotePlayer(){
+  playSound('promote');
+  if(currentDifficulty>=4){
+    document.getElementById('mIcon').textContent='👑';
+    document.getElementById('mTitle').textContent='已封神！';
+    document.getElementById('mDesc').textContent='你在传说难度下连续三胜，已达巅峰！';
+    setTimeout(()=>document.getElementById('modalOverlay').classList.add('show'),300);
+    points=0;
+  }else{
+    currentDifficulty++;
+    diff=currentDifficulty;
+    updateDiffBadge();
+    points=0;
+    document.getElementById('mIcon').textContent='🎉';
+    document.getElementById('mTitle').textContent='恭喜晋级！';
+    document.getElementById('mDesc').textContent='当前难度：'+DNAMES[currentDifficulty].replace(/[^\u4e00-\u9fa5]/g,'');
+    setTimeout(()=>document.getElementById('modalOverlay').classList.add('show'),300);
+  }
+  updatePointsDisplay();
+  setTimeout(()=>{hideModal();init()},3000);
+}
+
+function updateUI(){
+  const ind=document.getElementById('turnInd');
+  const ub=document.getElementById('undoBtn');
+  if(gameOver){ub.disabled=true;return}
+  ub.disabled=hist.length<2;
+  if(aiThinking){ind.className='turn-indicator ai';ind.textContent='⚪ AI 思考中…'}
+  else{ind.className='turn-indicator player';ind.textContent=playerFirst?'⚫ 你的回合':'⚪ 你的回合'}
+}
+
+function updateDiffBadge(){
+  const b=document.getElementById('diffBadge');
+  b.textContent=DNAMES[diff];
+  b.className='diff-badge lv'+diff;
+}
+
+function showResult(youWin){
+  const ind=document.getElementById('turnInd');
+  if(youWin){
+    points++;
+    updatePointsDisplay();
+    if(points>=POINTS_TO_PROMOTE){
+      promotePlayer();
+      return;
+    }
+    document.getElementById('mIcon').textContent='🏆';
+    document.getElementById('mTitle').textContent='你赢了！';
+    document.getElementById('mDesc').textContent='恭喜你在「'+DNAMES[diff].replace(/[^\u4e00-\u9fa5]/g,'')+'」难度战胜了AI！'+' 当前积分: '+'⭐'.repeat(points)+'☆'.repeat(POINTS_TO_PROMOTE-points)+' ('+points+'/'+POINTS_TO_PROMOTE+')';
+    ind.className='turn-indicator win';ind.textContent='🏆 你赢了！';
+    playSound('win');
+  }else{
+    points=0;updatePointsDisplay();
+    document.getElementById('mIcon').textContent='😅';
+    document.getElementById('mTitle').textContent='AI 赢了';
+    document.getElementById('mDesc').textContent='「'+DNAMES[diff].replace(/[^\u4e00-\u9fa5]/g,'')+'」难度的AI赢了，再试试？';
+    ind.className='turn-indicator ai';ind.textContent='😅 AI 赢了';
+    playSound('lose');
+  }
+  setTimeout(()=>document.getElementById('modalOverlay').classList.add('show'),600);
+}
+
+function showDraw(){
+  const ind=document.getElementById('turnInd');
+  document.getElementById('mIcon').textContent='🤝';
+  document.getElementById('mTitle').textContent='平局';
+  document.getElementById('mDesc').textContent='棋盘填满，势均力敌！';
+  ind.className='turn-indicator ai';ind.textContent='🤝 平局';
+  setTimeout(()=>document.getElementById('modalOverlay').classList.add('show'),400);
+}
+
+function hideModal(){document.getElementById('modalOverlay').classList.remove('show')}
+
+function showDiffScreen(){document.getElementById('diffScreen').classList.remove('hidden')}
+
+function selectDiff(d){
+  diff=d;
+  currentDifficulty=d;
+  points=0;
+  document.getElementById('diffScreen').classList.add('hidden');
+  updateDiffBadge();
+  updatePointsDisplay();
+  init();
+}
+
+function restartGame(){hideModal();init()}
+function toggleFirst(v){playerFirst=v;init()}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Boot & Event Wiring
+// ═══════════════════════════════════════════════════════════════════════════════
+// Wire difficulty selection buttons (also available via inline onclick)
+document.querySelectorAll('.diff-btn,.dbtn').forEach(btn => {
+  if (btn.dataset && btn.dataset.diff !== undefined) {
+    btn.addEventListener('click', () => {
+      selectDiff(parseInt(btn.dataset.diff));
+    });
+  }
+});
+
+// Start: show difficulty screen
+updateDiffBadge();
+showDiffScreen();
+</script>
+</body>
+</html>
